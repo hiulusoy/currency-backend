@@ -15,8 +15,7 @@ import java.time.Duration;
  * with a configurable backoff strategy.
  */
 @Configuration
-public class RetryConfiguration {  // Sınıf adını değiştirdik
-
+public class RetryConfiguration {
     /**
      * Creates a RetryRegistry with default configurations.
      * <p>

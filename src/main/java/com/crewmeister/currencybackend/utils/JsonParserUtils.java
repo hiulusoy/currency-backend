@@ -1,5 +1,4 @@
-package com.crewmeister.currencybackend.utils;// JsonParserUtils.java
-
+package com.crewmeister.currencybackend.utils;
 
 import com.crewmeister.currencybackend.dto.ExchangeRateDto;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -69,25 +68,25 @@ public class JsonParserUtils {
 
                 if (obsValues.isArray() && obsValues.size() > 0) {
                     JsonNode valueNode = obsValues.get(0);
-                    // Değer null, NaN veya sayısal değil ise atla
+                    // Skip if value is null, NaN or not numeric
                     if (valueNode.isNull() || valueNode.asText().equalsIgnoreCase("null")
                             || valueNode.asText().equalsIgnoreCase("nan")
                             || valueNode.asText().equalsIgnoreCase("n/a")) {
                         continue;
                     }
 
-                    // String değerini temizleyip geçersiz karakterleri kaldır
+                    // Clean the string value and remove invalid characters
                     String valueText = valueNode.asText().trim();
                     if (valueText.isEmpty()) {
                         continue;
                     }
 
-                    // Değeri BigDecimal'e dönüştür
+                    // Convert value to BigDecimal
                     BigDecimal rate;
                     try {
                         rate = new BigDecimal(valueText);
                     } catch (NumberFormatException e) {
-                        // Sayısal olmayan değeri loglayıp geç
+                        // Log and skip non-numeric value
                         System.err.println("Skipping non-numeric value: " + valueText + " for currency: " + currencyCode);
                         continue;
                     }
@@ -101,7 +100,7 @@ public class JsonParserUtils {
                     }
                 }
             } catch (Exception e) {
-                // Bir hata olursa bu gözlemi atla ve devam et
+                // Skip this observation if there's an error and continue
                 System.err.println("Error processing observation: " + e.getMessage());
                 continue;
             }
