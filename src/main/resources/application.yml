@@ -1,0 +1,108 @@
+# Server Configuration
+server:
+  port: 8088
+  servlet:
+    context-path: /
+spring:
+  application:
+    name: currency-exchange-service
+  
+  # Database Configuration - PostgreSQL
+  datasource:
+    url: jdbc:postgresql://localhost:5432/currency_db
+    driverClassName: org.postgresql.Driver
+    username: currency_user
+    password: currency_pass
+
+  # JPA/Hibernate Configuration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Swagger Configuration
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+
+# Bundesbank API Configuration
+bundesbank:
+  api:
+    url: https://api.statistiken.bundesbank.de/rest
+    dataflow-id: BBEX3
+
+# Scheduler Configuration
+scheduler:
+  exchange-rates:
+    cron: "0 0 12 * * ?"  # Runs daily at 12:00 PM
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.crewmeister.currencybackend: DEBUG
+    org.springframework.web: INFO
+    org.hibernate: ERROR
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      bundesbank:
+        baseConfig: default
+    configs:
+      default:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10000
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        permittedNumberOfCallsInHalfOpenState: 2
+        registerHealthIndicator: true
+  retry:
+    instances:
+      bundesbank:
+        baseConfig: default
+    configs:
+      default:
+        maxAttempts: 3
+        waitDuration: 200
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - java.net.SocketTimeoutException
+          - feign.FeignException
+  ratelimiter:
+    instances:
+      bundesbank:
+        baseConfig: default
+    configs:
+      default:
+        limitRefreshPeriod: 50000
+        limitForPeriod: 5
+        timeout-duration: 20000
+
+# Actuator Configurations
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,circuitbreakers,retries,prometheus
+  endpoint:
+    health:
+      show-details: always
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  info:
+    git:
+      mode: full

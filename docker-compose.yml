@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: currency-backend-postgres
+    environment:
+      POSTGRES_DB: currency_db
+      POSTGRES_USER: currency_user
+      POSTGRES_PASSWORD: currency_pass
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U currency_user -d currency_db" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - currency-network
+
+  sonarqube-db:
+    image: postgres:13
+    container_name: sonarqube-postgres
+    environment:
+      POSTGRES_DB: sonar
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: sonarpass
+    volumes:
+      - sonarqube-db-data:/var/lib/postgresql/data
+    networks:
+      - currency-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U sonar -d sonar" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: currency-backend-sonarqube
+    depends_on:
+      sonarqube-db:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonarqube-db:5432/sonar
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: sonarpass
+      SONAR_JDBC_DRIVER: org.postgresql.Driver
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-extensions:/opt/sonarqube/extensions
+      - sonarqube-logs:/opt/sonarqube/logs
+    ports:
+      - "9000:9000"
+    networks:
+      - currency-network
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--spider", "http://localhost:9000/api/system/status" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: currency-backend-jenkins
+    privileged: true
+    user: root
+    ports:
+      - "8081:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    networks:
+      - currency-network
+    depends_on:
+      - sonarqube
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/login" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  sonar-scanner:
+    image: sonarsource/sonar-scanner-cli
+    container_name: currency-backend-sonar-scanner
+    volumes:
+      - ./:/usr/src
+    working_dir: /usr/src
+    environment:
+      - SONAR_HOST_URL=http://sonarqube:9000
+    depends_on:
+      sonarqube:
+        condition: service_healthy
+    networks:
+      - currency-network
+    entrypoint: >
+      sh -c "
+        sonar-scanner \
+        -Dsonar.projectKey=currency-backend \
+        -Dsonar.sources=src/main/java \
+        -Dsonar.tests=src/test/java \
+        -Dsonar.java.binaries=target/classes \
+        -Dsonar.java.test.binaries=target/test-classes \
+        -Dsonar.host.url=http://sonarqube:9000 \
+        -Dsonar.token=YOUR_GENERATED_TOKEN \
+        -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+      "
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: currency-backend-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - currency-network
+    restart: unless-stopped
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: currency-backend-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - currency-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+networks:
+  currency-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  sonarqube-data:
+  sonarqube-extensions:
+  sonarqube-logs:
+  sonarqube-db-data:
+  jenkins-data:

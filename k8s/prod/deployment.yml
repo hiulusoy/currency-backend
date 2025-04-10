@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: currency-backend-deployment
+  namespace: currency-backend-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: currency-backend
+  template:
+    metadata:
+      labels:
+        app: currency-backend
+    spec:
+      containers:
+        - name: currency-backend
+          image: your-registry/currency-backend-service:prod-version
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: currency-backend-config
+            - secretRef:
+                name: currency-backend-secrets
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 1
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /actprodor/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actprodor/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 20
